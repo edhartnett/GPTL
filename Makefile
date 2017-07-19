@@ -9,6 +9,7 @@ endif
 null =
 OBJS = gptl.o util.o memusage.o gptl_papi.o pmpi.o getoverhead.o \
        hashstats.o memstats.o pr_summary.o print_rusage.o
+SOBJS = $(subst .o,.so,$(OBJS))
 
 ifeq ($(ENABLE_PMPI),yes)
   CFLAGS += -DENABLE_PMPI -DMPI_STATUS_SIZE_IN_INTS=$(MPI_STATUS_SIZE_IN_INTS)
@@ -99,8 +100,15 @@ ifeq ($(HAVE_GETTIMEOFDAY),yes)
 endif
 
 ##############################################################################
+CFLAGS += -fPIC
+FFLAGS += -fPIC
+%.o: %.c
+	$(CC) -c $(CFLAGS) $<
+	$(CC) -shared -o $*.so $@
+
 %.o: %.F90
 	$(FC) -c $(FFLAGS) $<
+	$(FC) -shared -o $*.so $@
 
 ifeq ($(FORTRAN),yes)
 all: lib$(LIBNAME).a $(MAKETESTS) printmpistatussize
@@ -129,6 +137,7 @@ ftests/test:
 
 lib$(LIBNAME).a: $(OBJS) $(FOBJS)
 	$(AR) ruv $@ $(OBJS) $(FOBJS)
+	$(CC) -shared -fPIC -Wl,-soname,lib$(LIBNAME).so -o lib$(LIBNAME).so
 	$(RM) -f ctests/*.o ftests/*.o
 
 install: lib$(LIBNAME).a

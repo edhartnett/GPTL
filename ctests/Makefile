@@ -4,7 +4,7 @@
 include ../macros.make
 
 # Ensure that CFLAGS are set for no optimization
-CFLAGS += -g -O0
+CFLAGS += -g -O0 -fPIC
 
 TESTS = global
 ifeq ($(HAVE_MPI),yes)
@@ -29,7 +29,7 @@ else
   LIBNAME = gptl
 endif
 
-LDFLAGS = $(CFLAGS) -L.. -l$(LIBNAME) $(ABIFLAGS) -lm
+LDFLAGS = $(CFLAGS) -shared -L.. -l$(LIBNAME) $(ABIFLAGS) -lm -Wl,-rpath=$(PWD) $(SOBJS)
 
 ifeq ($(OPENMP),yes)
   CFLAGS  += -DTHREADED_OMP $(COMPFLAG)

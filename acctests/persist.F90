@@ -8,7 +8,9 @@ program persist
 
   integer :: ret
   integer :: n
+  integer :: verbose = 1
   integer :: maxthreads_gpu = 3584
+  integer :: tablesize_gpu = 63
   integer :: outerlooplen = 100000
   integer :: innerlooplen = 100
   integer :: ans
@@ -26,6 +28,16 @@ program persist
   ret = gptlsetoption (gptlmaxthreads_gpu, maxthreads_gpu)
   write(6,*)'persist: calling gptlinitialize'
   ret = gptlinitialize ()
+  write(6,*)'persist: calling gptlinitialize_gpu'
+!$acc kernels copyin(verbose, tablesize_gpu, maxthreads_gpu) copyout(ret)
+  ret = gptlinitialize_gpu (verbose, tablesize_gpu, maxthreads_gpu)
+!$acc end kernels
+  if (ret == 0) then
+    write(6,*) 'Successful return from GPTLinitialize_gpu'
+  else
+    write(6,*) 'Failure from GPTLinitialize_gpu'
+  end if
+
 !JR Need to call GPU-specific init_handle routine because its tablesize may differ from CPU
 !$acc kernels copyout(ret,handle,handle2)
   ret = gptlinit_handle_gpu ('doalot_handle_sqrt_c', handle)
@@ -68,8 +80,11 @@ program persist
     vals(n) = doalot2 (n, innerlooplen)
   end do
 !$acc end parallel
+
   ret = gptlstop ('doalot_cpu_nogputimers')
+
   ret = gptlpr (0)
+  ret = gptlpr_gpu ()
 end program persist
 
 real function doalot (n, innerlooplen) result (sum)

@@ -9,7 +9,8 @@
 #include <stdio.h>
 #include <sys/time.h>
 // MAX_CHARS is needed from devicehost.h
-#include "devicehost.h"
+#include "./defs.h"
+#include "./devicehost.h"
 
 #ifndef MIN
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
@@ -155,7 +156,6 @@ extern int GPTLenable_gpu (void);
 extern int GPTLdisable_gpu (void);
 extern int GPTLreset_gpu (void);
 extern int GPTLget_gpu_freq (void);
-extern void GPTLprint_gpustats (FILE *fp, double gpu_hz, int, int);
 #endif
 
 #ifdef __cplusplus

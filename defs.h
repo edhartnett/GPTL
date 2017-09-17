@@ -1,0 +1,13 @@
+#ifndef GPTL_DEFS
+#define GPTL_DEFS
+
+#define MAX_CHARS 63
+
+#ifdef ENABLE_ACC
+#define WARPSIZE 32
+#define DEFAULT_MAXTHREADS_GPU 14336
+#define DEFAULT_TABLE_SIZE_GPU 63
+#define MAX_GPUTIMERS 50
+#endif
+
+#endif

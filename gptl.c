@@ -496,6 +496,7 @@ int GPTLinitialize (void)
     printf ("Per call overhead est. t2-t1=%g should be near zero\n", t2-t1);
     printf ("Underlying wallclock timing routine is %s\n", funclist[funcidx].name);
   }
+
 #ifdef ENABLE_ACC
   int khz;
   int warpsize;
@@ -507,13 +508,8 @@ int GPTLinitialize (void)
 
   gpu_hz = khz * 1000.;
   printf ("%s: GPU khz=%d\n", thisfunc, khz);
-#pragma acc kernels copyout(ret)
-  ret = GPTLinitialize_gpu (verbose, tablesize_gpu, maxthreads_gpu);
-  if (ret == 0)
-    printf ("%s: Successful return from GPTLinitialize_gpu\n", thisfunc);
-  else
-    return GPTLerror ("%s: Failure from GPTLinitialize_gpu\n", thisfunc);
 #endif
+
   imperfect_nest = false;
   initialized = true;
   return 0;
@@ -1746,10 +1742,6 @@ int GPTLpr_file (const char *outfile) /* output file to write */
   GPTLprint_memstats (fp, timers, nthreads, tablesize, maxthreads);
 
   free (sum);
-
-#ifdef ENABLE_ACC
-  GPTLprint_gpustats (fp, gpu_hz, maxthreads_gpu, devnum);
-#endif
 
   if (fp != stderr && fclose (fp) != 0)
     fprintf (stderr, "%s: Attempt to close %s failed\n", thisfunc, outfile);

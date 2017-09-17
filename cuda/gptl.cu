@@ -9,6 +9,7 @@
 #include <string.h>        /* memcpy */
 
 #include "./private.h"
+#include "../devicehost.h"
 #include "./gptl_acc.h"
 
 __device__ static Timer **timers = 0;             /* linked list of timers */
@@ -44,7 +45,6 @@ __device__ static void fill_gpustats (Gpustats *, Timer *, int);
 __device__ static int gptlstart_sim (char *, long long);
 
 /* These are invoked only from gptl.c */
-__device__ extern int GPTLinitialize_gpu (const int, const int, const int);
 __device__ extern int GPTLenable_gpu (void);
 __device__ extern int GPTLdisable_gpu (void);
 __device__ extern int GPTLreset_gpu (void);
@@ -278,7 +278,7 @@ __device__ int GPTLstart_handle_gpu (const char *name,  /* timer name */
     return 0;
 
   if ( ! initialized)
-    return GPTLerror_2s ("%s name=%s: GPTLinitialize has not been called\n", thisfunc, name);
+    return GPTLerror_2s ("%s name=%s: GPTLinitialize_gpu has not been called\n", thisfunc, name);
 
   if ((w = get_warp_num ()) == -1)
     return GPTLerror_1s ("%s: bad return from get_warp_num\n", thisfunc);
@@ -406,7 +406,7 @@ __device__ int GPTLstop_gpu (const char *name)               /* timer name */
     return 0;
 
   if ( ! initialized)
-    return GPTLerror_1s ("%s: GPTLinitialize has not been called\n", thisfunc);
+    return GPTLerror_1s ("%s: GPTLinitialize_gpu has not been called\n", thisfunc);
 
   /* Get the timestamp */
   tp1 = clock64 ();
@@ -467,7 +467,7 @@ __device__ int GPTLstop_handle_gpu (const char *name,     /* timer name */
     return 0;
 
   if ( ! initialized)
-    return GPTLerror_1s ("%s: GPTLinitialize has not been called\n", thisfunc);
+    return GPTLerror_1s ("%s: GPTLinitialize_gpu has not been called\n", thisfunc);
 
   /* Get the timestamp */
   tp1 = clock64 ();
@@ -580,7 +580,7 @@ __device__ int GPTLreset_gpu (void)
   static const char *thisfunc = "GPTLreset_gpu";
 
   if ( ! initialized)
-    return GPTLerror_1s ("%s: GPTLinitialize has not been called\n", thisfunc);
+    return GPTLerror_1s ("%s: GPTLinitialize_gpu has not been called\n", thisfunc);
 
   for (w = 0; w < nwarps_timed; w++) {
     for (ptr = timers[w]; ptr; ptr = ptr->next) {
@@ -712,10 +712,10 @@ __device__ static inline int get_warp_num ()
   return warpId;
 }
 
-__device__ int GPTLget_gpusizes (int nwarps_found_out[], int nwarps_timed_out[])
+__device__ int GPTLget_gpusizes (int *nwarps_found_out, int *nwarps_timed_out)
 {
-  nwarps_found_out[0] = nwarps_found;
-  nwarps_timed_out[0] = nwarps_timed;
+  *nwarps_found_out = nwarps_found;
+  *nwarps_timed_out = nwarps_timed;
   return 0;
 }
 
@@ -951,13 +951,13 @@ __host__ int GPTLget_gpu_props (int *khz, int *warpsize, int *devnum)
 **   self_ohd:           Estimate of GPTL-induced overhead in the timer itself (included in "Wallclock")
 **   parent_ohd:         Estimate of GPTL-induced overhead for the timer which appears in its parents
 */
-__device__ int GPTLget_overhead_gpu (long long ftn_ohd[1],
-				     long long get_warp_num_ohd[1], // Getting my warp index
-				     long long genhashidx_ohd[1],   // Generating hash index
-				     long long getentry_ohd[1],     // Finding entry in hash table
-				     long long utr_ohd[1],          // Underlying timing routine
-				     long long self_ohd[1],
-				     long long parent_ohd[1])
+__device__ int GPTLget_overhead_gpu (long long *ftn_ohd,
+				     long long *get_warp_num_ohd, // Getting my warp index
+				     long long *genhashidx_ohd,   // Generating hash index
+				     long long *getentry_ohd,     // Finding entry in hash table
+				     long long *utr_ohd,          // Underlying timing routine
+				     long long *self_ohd,
+				     long long *parent_ohd)
 {
   long long t1, t2;          /* Initial, final timer values */
   int i, n;
@@ -1070,6 +1070,13 @@ __device__ int GPTLget_memstats_gpu (float hashmem [1], float regionmem [1])
     hashmem[0]   += (float) numtimers * sizeof (Timer *);
     regionmem[0] += (float) numtimers * sizeof (Timer);
   }
+  return 0;
+}
+
+  __device__ int GPTLdummy_gpu (void)
+{
+  static const char *thisfunc = "GPTLdummy_gpu";
+  printf ("%s: hashtable=%p\n", thisfunc, hashtable);
   return 0;
 }
 

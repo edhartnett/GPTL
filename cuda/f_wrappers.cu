@@ -21,6 +21,8 @@
 #define gptlstop_gpu_c gptlstop_gpu_c_
 #define gptlstop_handle_gpu gptlstop_handle_gpu_
 #define gptlstop_handle_gpu_c gptlstop_handle_gpu_c_
+#define gptlfill_gpustats gptlfill_gpustats_
+#define gptlprint_gpustats gptlprint_gpustats_
 
 #elif ( defined FORTRANDOUBLEUNDERSCORE )
 
@@ -33,6 +35,8 @@
 #define gptlstop_gpu_c gptlstop_gpu_c__
 #define gptlstop_handle_gpu gptlstop_handle_gpu__
 #define gptlstop_handle_gpu_c gptlstop_handle_gpu_c__
+#define gptlfill_gpustats gptl_fillgpustats__
+#define gptlprint_gpustats gptlprint_gpustats__
 
 #endif
 
@@ -122,6 +126,26 @@ __device__ int gptlstop_gpu_c (const char *name, long long nc)
 __device__ int gptlstop_handle_gpu_c (const char *name, const int *handle, long long nc)
 {
   return GPTLstop_handle_gpu (name, handle);
+}
+
+__device__ int gptlfill_gpustats (Gpustats gpustats[MAX_GPUTIMERS], 
+				  int *max_name_len_out, 
+				  int *ngputimers)
+{
+  return GPTLfill_gpustats (gpustats, max_name_len_out, ngputimers);
+}
+
+__host__ void gptlprint_gpustats (int *nwarps_found, int *nwarps_timed, 
+			          int *ftn_ohdgpu, int *get_thread_num_ohdgpu, int *genhashidx_ohdgpu,
+				  int *getentry_ohdgpu, int *utr_ohdgpu, int *self_ohdgpu, int *parent_ohdgpu,
+				  Gpustats gpustats[], int *max_name_len, int *ngputimers,
+				  int *hashmem, int *regionmem)
+{
+  GPTLprint_gpustats (*nwarps_found, *nwarps_timed, 
+		      *ftn_ohdgpu, *get_thread_num_ohdgpu, *genhashidx_ohdgpu,
+		      *getentry_ohdgpu, *utr_ohdgpu, *self_ohdgpu, *parent_ohdgpu,
+		      gpustats, *max_name_len, *ngputimers,
+		      *hashmem, *regionmem);
 }
 
 }

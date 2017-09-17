@@ -6,6 +6,10 @@
 ** Contains definitions private to GPTL and inaccessible to invoking user environment
 */
 
+#ifndef GPTL_PRIVATE_CUDA
+#define GPTL_PRIVATE_CUDA
+
+#include "../defs.h"
 #include "../devicehost.h"
 
 #ifndef MIN
@@ -50,7 +54,7 @@ __device__ extern int GPTLenable_gpu (void);
 __device__ extern int GPTLdisable_gpu (void);
 __device__ extern int GPTLreset_gpu (void);
 
-  /* These are callable from within gptl.cu */
+/* These are callable from within gptl.cu */
 __device__ extern int GPTLerror_1s (const char *, const char *);
 __device__ extern int GPTLerror_2s (const char *, const char *, const char *);
 __device__ extern int GPTLerror_1s1d (const char *, const char *, const int);
@@ -66,4 +70,13 @@ __device__ extern int GPTLget_overhead_gpu (long long [],            /* Fortran 
 					    long long [],            /* Underlying timing routine */
 					    long long [],            /* self_ohd */
 					    long long []);           /* parent_ohd */
+__device__ extern int GPTLfill_gpustats (Gpustats gpustats[], 
+					 int *, 
+					 int *);
+__host__ extern int GPTLget_gpu_props (int *, int *, int *);
+__host__ extern void GPTLprint_gpustats (int, int,
+					 long long, long long, long long, long long, long long, long long, long long,
+					 Gpustats [], int, int,
+					 float, float);
 }
+#endif

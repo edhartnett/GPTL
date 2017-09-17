@@ -105,8 +105,7 @@ endif
 
 ALLARGS = lib$(LIBNAME).a
 ifeq ($(ENABLE_ACC),yes)
-  OBJS    += print_gpustats.o
-  CFLAGS  += -acc -Minfo=accel -Minfo -ta=tesla:cc60
+  CFLAGS += -acc -Minfo=accel -Minfo -ta=tesla:cc60
 endif
 
 ALLARGS += $(MAKETESTS)

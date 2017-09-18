@@ -1,13 +1,17 @@
 module gptl_acc
 ! GPTL module file for user code. This file contains an interface block for 
 ! parameter checking.
-
+  
   implicit none
   public
 
 ! Function prototypes
 
   interface
+    subroutine gptldummy_gpu () bind(C,name="GPTLdummy_gpu")
+!$acc routine seq
+    end subroutine gptldummy_gpu
+
      integer function gptlstart_gpu (name)
 !$acc routine seq
        character(len=*) :: name

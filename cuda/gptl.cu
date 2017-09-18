@@ -78,9 +78,10 @@ __device__ int GPTLinitialize_gpu (const int verbose_in,
   // Set global vars from input args
   verbose     = verbose_in;
   maxthreads  = maxthreads_in;
-  if (maxthreads % WARPSIZE != 0)
+  if (maxthreads % WARPSIZE != 0) {
     return GPTLerror_1s1d ("%s: maxthreads=%d must divide WARPSIZE evenly\n", 
-			   thisfunc, maxthreads);
+	    thisfunc, maxthreads);
+  }
 
   tablesize   = tablesize_in;
   tablesizem1 = tablesize_in - 1;
@@ -1071,6 +1072,12 @@ __device__ int GPTLget_memstats_gpu (float hashmem [1], float regionmem [1])
     regionmem[0] += (float) numtimers * sizeof (Timer);
   }
   return 0;
+}
+__global__ void GPTLdummy_gpu (void)
+{
+  static const char *thisfunc = "GPTLdummy_gpu";
+  printf ("%s: hashtable=%p\n", thisfunc, hashtable);
+  return;
 }
 
 }

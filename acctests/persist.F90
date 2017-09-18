@@ -2,7 +2,6 @@ program persist
   use gptl
   use gptl_acc
   implicit none
-!$acc routine (gptlinit_handle_gpu) seq
 !$acc routine (doalot) seq
 !$acc routine (doalot2) seq
 
@@ -11,14 +10,18 @@ program persist
   integer :: maxthreads_gpu = 3584
   integer :: outerlooplen = 100000
   integer :: innerlooplen = 100
+  integer :: balfact = 1
+  integer :: niter
   integer :: ans
   integer :: handle, handle2
+
   real, allocatable :: vals(:)
   real, external :: doalot, doalot2
 
   call getval (maxthreads_gpu, 'maxthreads_gpu')
   call getval (outerlooplen, 'outerlooplen')
   call getval (innerlooplen, 'innerlooplen')
+  call getval (balfact, 'balfact: 0=LtoR 1=balanced 2=RtoL')
   allocate (vals(outerlooplen))
 
 !JR NOTE: gptlinitialize call increases mallocable memory size on GPU. That call will fail
@@ -26,6 +29,10 @@ program persist
   ret = gptlsetoption (gptlmaxthreads_gpu, maxthreads_gpu)
   write(6,*)'persist: calling gptlinitialize'
   ret = gptlinitialize ()
+!$acc kernels
+  call gptldummy_gpu ()
+!$acc end kernels
+  
 !JR Need to call GPU-specific init_handle routine because its tablesize may differ from CPU
 !$acc kernels copyout(ret,handle,handle2)
   ret = gptlinit_handle_gpu ('doalot_handle_sqrt_c', handle)
@@ -33,39 +40,57 @@ program persist
 !$acc end kernels
 
   ret = gptlstart ('doalot_cpu')
-!$acc parallel loop copyin(handle,handle2) copyout(ret, vals)
+!$acc parallel loop private(niter) copyin(balfact,handle,handle2) copyout(ret, vals)
   do n=1,outerlooplen
+    select case (balfact)
+    case (0)
+      niter = n
+    case (1)
+      niter = outerlooplen
+    case (2)
+      niter = outerlooplen - n + 1
+    end select
+    
     ret = gptlstart_gpu ('doalot_log')
-    vals(n) = doalot (n, innerlooplen)
+    vals(n) = doalot (niter, innerlooplen)
     ret = gptlstop_gpu ('doalot_log')
 
     ret = gptlstart_gpu ('doalot_sqrt')
-    vals(n) = doalot2 (n, innerlooplen)
+    vals(n) = doalot2 (niter, innerlooplen)
     ret = gptlstop_gpu ('doalot_sqrt')
 
     ret = gptlstart_gpu_c ('doalot_sqrt_c'//char(0))
-    vals(n) = doalot2 (n, innerlooplen)
+    vals(n) = doalot2 (niter, innerlooplen)
     ret = gptlstop_gpu_c ('doalot_sqrt_c'//char(0))
 
     ret = gptlstart_handle_gpu_c ('doalot_handle_sqrt_c'//char(0), handle)
-    vals(n) = doalot2 (n, innerlooplen)
+    vals(n) = doalot2 (niter, innerlooplen)
     ret = gptlstop_handle_gpu_c ('doalot_handle_sqrt_c'//char(0), handle)
 
     ret = gptlstart_handle_gpu_c ('a'//char(0), handle2)
-    vals(n) = doalot2 (n, innerlooplen)
+    vals(n) = doalot2 (niter, innerlooplen)
     ret = gptlstop_handle_gpu_c ('a'//char(0), handle2)
   end do
 !$acc end parallel
   ret = gptlstop ('doalot_cpu')
 
   ret = gptlstart ('doalot_cpu_nogputimers')
-!$acc parallel loop copyout(vals)
+
+!$acc parallel loop private(niter) copyin(balfact) copyout(vals)
   do n=1,outerlooplen
-    vals(n) = doalot (n, innerlooplen)
-    vals(n) = doalot2 (n, innerlooplen)
-    vals(n) = doalot2 (n, innerlooplen)
-    vals(n) = doalot2 (n, innerlooplen)
-    vals(n) = doalot2 (n, innerlooplen)
+    select case (balfact)
+    case (0)
+      niter = n
+    case (1)
+      niter = outerlooplen
+    case (2)
+      niter = outerlooplen - n + 1
+    end select
+    vals(n) = doalot (niter, innerlooplen)
+    vals(n) = doalot2 (niter, innerlooplen)
+    vals(n) = doalot2 (niter, innerlooplen)
+    vals(n) = doalot2 (niter, innerlooplen)
+    vals(n) = doalot2 (niter, innerlooplen)
   end do
 !$acc end parallel
   ret = gptlstop ('doalot_cpu_nogputimers')
@@ -115,5 +140,5 @@ subroutine getval (arg, str)
   if (ans /= -1) then
     arg = ans
   end if
-  write(6,*) str,'=',arg
+  write(6,*) 'arg=',arg
 end subroutine getval

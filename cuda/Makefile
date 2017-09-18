@@ -6,7 +6,7 @@ CU      = nvcc
 CUFLAGS = -UDEBUG -DENABLE_ACC $(UNDERSCORING) -G -O0 -ftz=true -gencode arch=compute_60,code=compute_60 -rdc=true
 ARFLAGS = ruv
 
-OBJS = gptl.o util.o f_wrappers.o gptl_acc.o
+OBJS = GPUinit.o gptl.o util.o f_wrappers.o gptl_acc.o
 
 %.o: %.cu
 	$(CU) -c $< $(CUFLAGS)

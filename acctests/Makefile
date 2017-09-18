@@ -7,6 +7,10 @@ else
   FFLAGS  = -g -O0 -I$(GPTL) -I$(GPTL)/cuda -acc -Minfo=accel -Minfo              -ta=tesla:cc60
   LDFLAGS = -L$(GPTL) -lgptl -L$(GPTL)/cuda -lgptl_cuda -Mcuda=cuda8     -ta=tesla:cc60
 endif
+
+# DO NOT ADD THIS FLAG: IT SCREWS UP THE OUTPUT!!!
+#FFLAGS += -Mcuda=keepgpu
+
 OBJS1 = persist.o
 OBJS2 = persist_mpi.o
 OBJS = $(OBJS1) $(OBJS2)

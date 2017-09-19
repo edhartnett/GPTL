@@ -95,7 +95,6 @@ __device__ int GPTLinitialize_gpu (const int verbose_in,
   hashtable     = (Hashentry **) GPTLallocate_gpu (maxwarps * sizeof (Hashentry *), thisfunc);
 
   /* Initialize array values */
-  printf ("GPU initialize loop 1\n");
   for (w = 0; w < maxwarps; w++) {
     max_name_len[w] = 0;
     hashtable[w] = (Hashentry *) GPTLallocate_gpu (tablesize * sizeof (Hashentry), thisfunc);
@@ -251,10 +250,14 @@ __device__ int GPTLstart_gpu (const char *name)               /* timer name */
 __device__ int GPTLinit_handle_gpu (const char *name,     /* timer name */
 				    int *handle)          /* handle (output if input value is zero) */
 {
+  static const char *thisfunc = "GPTLinit_handle_gpu";
   if (disabled)
     return 0;
 
   *handle = (int) genhashidx (name);
+#ifdef VERBOSE
+  printf ("%s: name=%s generated handle=%d\n", thisfunc, name, *handle);
+#endif
   return 0;
 }
 
@@ -1073,10 +1076,11 @@ __device__ int GPTLget_memstats_gpu (float hashmem [1], float regionmem [1])
   }
   return 0;
 }
-__global__ void GPTLdummy_gpu (void)
+
+__device__ void GPTLdummy_gpu (int num)
 {
   static const char *thisfunc = "GPTLdummy_gpu";
-  printf ("%s: hashtable=%p\n", thisfunc, hashtable);
+  printf ("%s: num=%d hashtable=%p\n", thisfunc, num, hashtable);
   return;
 }
 

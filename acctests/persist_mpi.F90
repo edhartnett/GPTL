@@ -10,14 +10,15 @@ program persist
   integer :: ret
   integer :: n
   integer :: maxthreads_gpu = 3584
-  integer :: outerlooplen = 100000
+  integer :: outerlooplen
   integer :: innerlooplen = 100
   integer :: balfact = 1
   integer :: niter
   integer :: ans
-  integer :: handle, handle2
+  integer :: handle = 0, handle2 = 0
   integer :: myrank, ierr         ! MPI stuff
   integer :: ngpus, devicenum     ! gpu stuff
+  real :: factor = 1.
 
   real, allocatable :: vals(:)
   real, external :: doalot, doalot2
@@ -50,13 +51,16 @@ program persist
 
   if (myrank == 0) then
     call getval (maxthreads_gpu, 'maxthreads_gpu')
-    call getval (outerlooplen, 'outerlooplen')
+    call getval_real (factor, 'factor: maxthreads * FACTOR = outerlooplen')
+    outerlooplen = maxthreads_gpu * nint (factor)
+    write(6,*)'outerlooplen=',outerlooplen
     call getval (innerlooplen, 'innerlooplen')
     call getval (balfact, 'balfact: 0=LtoR 1=balanced 2=RtoL')
   end if
   call mpi_bcast (maxthreads_gpu, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
   call mpi_bcast (outerlooplen,   1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
   call mpi_bcast (innerlooplen,   1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+  call mpi_bcast (balfact,        1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
   allocate (vals(outerlooplen))
 
 !JR NOTE: gptlinitialize call increases mallocable memory size on GPU. That call will fail
@@ -64,16 +68,13 @@ program persist
   ret = gptlsetoption (gptlmaxthreads_gpu, maxthreads_gpu)
   write(6,*)'persist_mpi myrank=',myrank,': calling gptlinitialize'
   ret = gptlinitialize ()
-!$acc kernels
-  call gptldummy_gpu ()
-!$acc end kernels
-  
-!JR Need to call GPU-specific init_handle routine because its tablesize may differ from CPU
-!$acc kernels copyout(ret,handle,handle2)
+!$acc parallel copyout(ret,handle,handle2)
+  call gptldummy_gpu (1)
   ret = gptlinit_handle_gpu ('doalot_handle_sqrt_c', handle)
+  call gptldummy_gpu (2)
   ret = gptlinit_handle_gpu ('a', handle2)
-!$acc end kernels
-
+!$acc end parallel
+  
   ret = gptlstart ('doalot_cpu')
 !$acc parallel loop private(niter) copyin(balfact,handle,handle2) copyout(ret, vals)
   do n=1,outerlooplen
@@ -170,10 +171,26 @@ subroutine getval (arg, str)
 
   integer :: ans
 
-  write(6,*)'Enter ',str,' or -1 to accept default (',arg,')'
+  write(6,'(a,a,a,i9,a)')'Enter ',str,' or -1 to accept default (',arg,')'
   read(5,*) ans
   if (ans /= -1) then
     arg = ans
   end if
   write(6,*) 'arg=',arg
 end subroutine getval
+
+subroutine getval_real (arg, str)
+  implicit none
+
+  real, intent(inout) :: arg
+  character(len=*), intent(in) :: str
+
+  real :: ans
+
+  write(6,'(a,a,a,f5.3,a)')'Enter ',str,' or -1 to accept default (',arg,')'
+  read(5,*) ans
+  if (ans /= -1.) then
+    arg = ans
+  end if
+  write(6,*) 'arg=',arg
+end subroutine getval_real

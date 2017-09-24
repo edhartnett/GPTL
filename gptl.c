@@ -207,8 +207,6 @@ static int devnum = -1;
 #pragma acc routine (GPTLinitialize_gpu) seq 
 #pragma acc routine (GPTLget_ngputimers) seq 
 #pragma acc routine (GPTLfinalize_gpu) seq 
-#pragma acc routine (GPTLenable_gpu) seq 
-#pragma acc routine (GPTLdisable_gpu) seq 
 #pragma acc routine (GPTLreset_gpu) seq
 #endif
 
@@ -325,13 +323,15 @@ int GPTLsetoption (const int option,  /* option */
   case GPTLmaxthreads_gpu:
     if (val < 1)
       return GPTLerror ("%s: maxthreads_gpu must be positive. %d is invalid\n", thisfunc, val);
-    if (val % WARPSIZE != 0)
-      return GPTLerror ("%s: maxthreads_gpu must be multiple of WARPSIZE=%d. %d is invalid\n", 
-			thisfunc, WARPSIZE, val);
-
-    maxthreads_gpu = val;
+    if (val % WARPSIZE == 0) {
+      maxthreads_gpu = val;
+    } else {
+      maxthreads_gpu = ((val / WARPSIZE) * WARPSIZE) + WARPSIZE;
+      printf ("%s: changed maxthreads_gpu from %d to %d to be multiple of WARPSIZE=%d\n",
+	      thisfunc, val, maxthreads_gpu, WARPSIZE);
+    }
     if (verbose)
-      printf ("%s: tablesize_gpu = %d\n", thisfunc, maxthreads_gpu);
+      printf ("%s: maxthreads_gpu = %d\n", thisfunc, maxthreads_gpu);
     return 0;
   case GPTLtablesize_gpu:
     if (val < 1)
@@ -508,7 +508,7 @@ int GPTLinitialize (void)
   gpu_hz = khz * 1000.;
   printf ("%s: GPU khz=%d\n", thisfunc, khz);
 #pragma acc kernels copyout(ret)
-  ret = GPTLinitialize_gpu (verbose, tablesize_gpu, maxthreads_gpu);
+  ret = GPTLinitialize_gpu (verbose, tablesize_gpu, maxthreads_gpu, gpu_hz);
   if (ret == 0)
     printf ("%s: Successful return from GPTLinitialize_gpu\n", thisfunc);
   else
@@ -1301,12 +1301,7 @@ int GPTLenable (void)
   int ret;
 
   disabled = false;
-#ifdef ENABLE_ACC
-#pragma acc kernels copyout(ret)
-  ret = GPTLenable_gpu ();
-#else
   ret = 0;
-#endif
   return ret;
 }
 
@@ -1320,12 +1315,7 @@ int GPTLdisable (void)
   int ret;
 
   disabled = true;
-#ifdef ENABLE_ACC
-#pragma acc kernels copyout(ret)
-  ret = GPTLdisable_gpu ();
-#else
   ret = 0;
-#endif
   return ret;
 }
 

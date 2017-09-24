@@ -18,7 +18,6 @@ __device__ static int maxthreads = -1;            /* max threads */
 __device__ static int maxwarps = -1;              /* max warps */
 __device__ static int nwarps_found = 0;           /* number of warps found : init to 0 */
 __device__ static int nwarps_timed = 0;           /* number of warps analyzed : init to 0 */
-__device__ static bool disabled = false;          /* Timers disabled? */
 __device__ static bool initialized = false;       /* GPTLinitialize has been called */
 __device__ static bool verbose = false;           /* output verbosity */
 
@@ -26,11 +25,13 @@ __device__ static bool verbose = false;           /* output verbosity */
 __device__ static Hashentry **hashtable;          /* table of entries */
 __device__ static int tablesize;                  // size of hash table
 __device__ static int tablesizem1;                // one less
+__device__ static double gpu_hz = 0.;             // clock freq
 
 extern "C" {
 
 /* Local function prototypes */
-__device__ static inline int get_warp_num (void);         /* get 0-based warp number */
+__device__ static inline int get_warp_num (void);   // get 0-based warp number
+__device__ static inline int get_thread_num (void); // get 0-based thread number
 __device__ static inline unsigned int genhashidx (const char *);
 __device__ static inline Timer *getentry (const Hashentry *, const char *, unsigned int);
 __device__ static inline int update_stats (Timer *, const long long, const int);
@@ -44,9 +45,7 @@ __device__ static void fill_gpustats (Gpustats *, Timer *, int);
 __device__ static int gptlstart_sim (char *, long long);
 
 /* These are invoked only from gptl.c */
-__device__ extern int GPTLinitialize_gpu (const int, const int, const int);
-__device__ extern int GPTLenable_gpu (void);
-__device__ extern int GPTLdisable_gpu (void);
+__device__ extern int GPTLinitialize_gpu (const int, const int, const int, const double);
 __device__ extern int GPTLreset_gpu (void);
 
 /* VERBOSE is a debugging ifdef local to the rest of this file */
@@ -61,7 +60,8 @@ __device__ extern int GPTLreset_gpu (void);
 */
 __device__ int GPTLinitialize_gpu (const int verbose_in,
 				   const int tablesize_in,
-				   const int maxthreads_in)
+				   const int maxthreads_in,
+				   const double gpu_hz_in)
 {
   int i;                 /* loop index */
   int w;
@@ -77,17 +77,14 @@ __device__ int GPTLinitialize_gpu (const int verbose_in,
 
   // Set global vars from input args
   verbose     = verbose_in;
+  // maxthreads_in guaranteed multiple of WARPSIZE in gptl.c
   maxthreads  = maxthreads_in;
-  if (maxthreads % WARPSIZE != 0) {
-    return GPTLerror_1s1d ("%s: maxthreads=%d must divide WARPSIZE evenly\n", 
-	    thisfunc, maxthreads);
-  }
-
+  maxwarps    = maxthreads / WARPSIZE;
   tablesize   = tablesize_in;
   tablesizem1 = tablesize_in - 1;
-  maxwarps = maxthreads / WARPSIZE;
+  gpu_hz = gpu_hz_in;
 
-  /* Allocate space for global arrays */
+  // Allocate space for global arrays
   timers        = (Timer **)     GPTLallocate_gpu (maxwarps * sizeof (Timer *), thisfunc);
   last          = (Timer **)     GPTLallocate_gpu (maxwarps * sizeof (Timer *), thisfunc);
   max_name_len  = (int *)        GPTLallocate_gpu (maxwarps * sizeof (int), thisfunc);
@@ -102,7 +99,7 @@ __device__ int GPTLinitialize_gpu (const int verbose_in,
       hashtable[w][i].nument = 0;
     }
 
-    /* Make a timer "GPTL_ROOT" to ensure no orphans, and to simplify printing. */
+    // Make a timer "GPTL_ROOT" to ensure no orphans, and to simplify printing.
     timers[w] = (Timer *) GPTLallocate_gpu (sizeof (Timer), thisfunc);
     memset (timers[w], 0, sizeof (Timer));
     (void) my_strcpy (timers[w]->name, "GPTL_ROOT");
@@ -123,7 +120,7 @@ __device__ int GPTLinitialize_gpu (const int verbose_in,
   initialized = true;
   printf("end %s: maxthreads=%d maxwarps=%d hashtable addr=%p\n", 
 	 thisfunc, maxthreads, maxwarps, hashtable);
-  return 0;
+  return SUCCESS;
 }
 
 /*
@@ -141,6 +138,9 @@ __device__ int GPTLfinalize_gpu (void)
   if ( ! initialized)
     return GPTLerror_1s ("%s: initialization was not completed\n", thisfunc);
 
+  if (get_warp_num () != 0) 
+    return GPTLerror_1s ("%s: Need to be thread 0 of warp 0\n", thisfunc);
+
   for (w = 0; w < maxwarps; ++w) {
     free (hashtable[w]);
     hashtable[w] = NULL;
@@ -157,16 +157,15 @@ __device__ int GPTLfinalize_gpu (void)
 
   GPTLreset_errors_gpu ();
 
-  /* Reset initial values */
+  // Reset initial values
   timers = 0;
   last = 0;
   max_name_len = 0;
   maxthreads = -1;
-  disabled = false;
   initialized = false;
   verbose = false;
 
-  return 0;
+  return SUCCESS;
 }
 
 /*
@@ -188,32 +187,16 @@ __device__ int GPTLstart_gpu (const char *name)               /* timer name */
   //JR: This is for debugging the CUDA bug in which static data reverts to initial values
   //printf("%s: name=%s: maxwarps=%d hashtable addr=%p\n", thisfunc, name, maxwarps, hashtable);
 
-  if (disabled)
-    return 0;
-
   if ( ! initialized)
     return GPTLerror_2s ("%s name=%s: GPTLinitialize_gpu has not been called\n", thisfunc, name);
 
-  if ((w = get_warp_num ()) == -1)
-    return GPTLerror_1s ("%s: bad return from get_warp_num\n", thisfunc);
+  // Just return if not_warp_root or warpid_gt_maxwarps
+  if ((w = get_warp_num ()) < 0)
+    return SUCCESS;
 
-  // Return if not thread 0 of the warp
-  if (w < 0)
-    return 0;
-
-  /* ptr will point to the requested timer in the current list, or NULL if this is a new entry */
+  // ptr will point to the requested timer in the current list, or NULL if this is a new entry
   indx = genhashidx (name);
   ptr = getentry (hashtable[w], name, indx);
-
-  /* 
-  ** Recursion => increment depth in recursion and return.  We need to return 
-  ** because we don't want to restart the timer.  We want the reported time for
-  ** the timer to reflect the outermost layer of recursion.
-  */
-  if (ptr && ptr->onflg) {
-    ++ptr->recurselvl;
-    return 0;
-  }
 
   if ( ! ptr) { /* Add a new entry and initialize */
     if (hashtable[w][indx].nument > MAXENT-1)
@@ -230,10 +213,8 @@ __device__ int GPTLstart_gpu (const char *name)               /* timer name */
       return GPTLerror_1s ("%s: update_ll_hash error\n", thisfunc);
   }
 
-  if (update_ptr (ptr, w) != 0)
-    return GPTLerror_1s ("%s: update_ptr error\n", thisfunc);
-
-  return 0;
+  (void) update_ptr (ptr, w);
+  return SUCCESS;
 }
 
 /*
@@ -251,14 +232,12 @@ __device__ int GPTLinit_handle_gpu (const char *name,     /* timer name */
 				    int *handle)          /* handle (output if input value is zero) */
 {
   static const char *thisfunc = "GPTLinit_handle_gpu";
-  if (disabled)
-    return 0;
 
   *handle = (int) genhashidx (name);
 #ifdef VERBOSE
   printf ("%s: name=%s generated handle=%d\n", thisfunc, name, *handle);
 #endif
-  return 0;
+  return SUCCESS;
 }
 
 /*
@@ -278,18 +257,12 @@ __device__ int GPTLstart_handle_gpu (const char *name,  /* timer name */
   int numchars;      /* number of characters to copy */
   static const char *thisfunc = "GPTLstart_handle_gpu";
 
-  if (disabled)
-    return 0;
-
   if ( ! initialized)
     return GPTLerror_2s ("%s name=%s: GPTLinitialize has not been called\n", thisfunc, name);
 
-  if ((w = get_warp_num ()) == -1)
-    return GPTLerror_1s ("%s: bad return from get_warp_num\n", thisfunc);
-
-  // Return if not thread 0 of the warp
-  if (w < 0)
-    return 0;
+  // Just return if not_warp_root or warpid_gt_maxwarps
+  if ((w = get_warp_num ()) < 0)
+    return SUCCESS;
 
   /*
   ** If handle is zero on input, generate the hash entry and return it to the user.
@@ -307,18 +280,7 @@ __device__ int GPTLstart_handle_gpu (const char *name,  /* timer name */
 			   thisfunc, *handle, tablesizem1);
   }
 
-  ptr = getentry (hashtable[w], name, (unsigned int) *handle);
-  
-  /* 
-  ** Recursion => increment depth in recursion and return.  We need to return 
-  ** because we don't want to restart the timer.  We want the reported time for
-  ** the timer to reflect the outermost layer of recursion.
-  */
-  if (ptr && ptr->onflg) {
-    ++ptr->recurselvl;
-    return 0;
-  }
-
+  ptr = getentry (hashtable[w], name, (unsigned int) *handle);  
   if ( ! ptr) { /* Add a new entry and initialize */
     if (hashtable[w][*handle].nument > MAXENT-1)
       return GPTLerror_2s ("%s: %s caused too many hash collisions\n", thisfunc, name);
@@ -334,10 +296,8 @@ __device__ int GPTLstart_handle_gpu (const char *name,  /* timer name */
       return GPTLerror_1s ("%s: update_ll_hash error\n", thisfunc);
   }
 
-  if (update_ptr (ptr, w) != 0)
-    return GPTLerror_1s ("%s: update_ptr error\n", thisfunc);
-
-  return 0;
+  (void) update_ptr (ptr, w);
+  return SUCCESS;
 }
 
 /*
@@ -355,7 +315,6 @@ __device__ static int update_ll_hash (Timer *ptr, int w, unsigned int indx)
 {
   int nchars;      /* number of chars */
   int nument;      /* number of entries */
-  static const char *thisfunc = "update_ll_hash";
 
   nchars = my_strlen (ptr->name);
   if (nchars > max_name_len[w])
@@ -368,7 +327,7 @@ __device__ static int update_ll_hash (Timer *ptr, int w, unsigned int indx)
   ++hashtable[w][indx].nument;
   nument = hashtable[w][indx].nument;
   hashtable[w][indx].entries[nument-1] = ptr;
-  return 0;
+  return SUCCESS;
 }
 
 /*
@@ -387,7 +346,7 @@ __device__ static inline int update_ptr (Timer *ptr, const int w)
   ptr->onflg = true;
   tp2 = clock64 ();
   ptr->wall.last = tp2;
-  return 0;
+  return SUCCESS;
 }
 
 /*
@@ -400,27 +359,21 @@ __device__ static inline int update_ptr (Timer *ptr, const int w)
 */
 __device__ int GPTLstop_gpu (const char *name)               /* timer name */
 {
-  long long tp1 = 0;         /* time stamp */
+  long long tp1;             /* time stamp */
   Timer *ptr;                /* linked list pointer */
   int w;                     /* warp number for this process */
   unsigned int indx;         /* index into hash table */
   static const char *thisfunc = "GPTLstop_gpu";
 
-  if (disabled)
-    return 0;
-
   if ( ! initialized)
     return GPTLerror_1s ("%s: GPTLinitialize has not been called\n", thisfunc);
 
-  /* Get the timestamp */
+  // Get the timestamp
   tp1 = clock64 ();
 
-  if ((w = get_warp_num ()) == -1)
-    return GPTLerror_1s ("%s: bad return from get_warp_num\n", thisfunc);
-
-  // Return if not thread 0 of the warp
-  if (w < 0)
-    return 0;
+  // Just return if not_warp_root or warpid_gt_maxwarps
+  if ((w = get_warp_num ()) < 0)
+    return SUCCESS;
 
   indx = genhashidx (name);
   if (! (ptr = getentry (hashtable[w], name, indx)))
@@ -432,21 +385,8 @@ __device__ int GPTLstop_gpu (const char *name)               /* timer name */
 			 thisfunc, ptr->name);
 
   ++ptr->count;
-
-  /* 
-  ** Recursion => decrement depth in recursion and return.  We need to return
-  ** because we don't want to stop the timer.  We want the reported time for
-  ** the timer to reflect the outermost layer of recursion.
-  */
-  if (ptr->recurselvl > 0) {
-    --ptr->recurselvl;
-    return 0;
-  }
-
-  if (update_stats (ptr, tp1, w) != 0)
-    return GPTLerror_1s ("%s: error from update_stats\n", thisfunc);
-
-  return 0;
+  (void) update_stats (ptr, tp1, w);
+  return SUCCESS;
 }
 
 /*
@@ -467,21 +407,15 @@ __device__ int GPTLstop_handle_gpu (const char *name,     /* timer name */
   unsigned int indx;
   static const char *thisfunc = "GPTLstop_handle_gpu";
 
-  if (disabled)
-    return 0;
-
   if ( ! initialized)
     return GPTLerror_1s ("%s: GPTLinitialize has not been called\n", thisfunc);
 
   /* Get the timestamp */
   tp1 = clock64 ();
 
-  if ((w = get_warp_num ()) == -1)
-    return GPTLerror_1s ("%s: bad return from get_warp_num\n", thisfunc);
-
-  // Return if not thread 0 of the warp
-  if (w < 0)
-    return 0;
+  // Just return if not_warp_root or warpid_gt_maxwarps
+  if ((w = get_warp_num ()) < 0)
+    return SUCCESS;
 
   indx = (unsigned int) *handle;
   if (indx == 0 || indx > tablesizem1)
@@ -496,21 +430,8 @@ __device__ int GPTLstop_handle_gpu (const char *name,     /* timer name */
     return GPTLerror_2s ("%s: timer %s was already off.\n", thisfunc, ptr->name);
 
   ++ptr->count;
-
-  /* 
-  ** Recursion => decrement depth in recursion and return.  We need to return
-  ** because we don't want to stop the timer.  We want the reported time for
-  ** the timer to reflect the outermost layer of recursion.
-  */
-  if (ptr->recurselvl > 0) {
-    --ptr->recurselvl;
-    return 0;
-  }
-
-  if (update_stats (ptr, tp1, w) != 0)
-    return GPTLerror_1s ("%s: error from update_stats\n", thisfunc);
-
-  return 0;
+  (void) update_stats (ptr, tp1, w);
+  return SUCCESS;
 }
 
 /*
@@ -547,29 +468,7 @@ __device__ static inline int update_stats (Timer *ptr,
     if (delta < ptr->wall.min)
       ptr->wall.min = delta;
   }
-  return 0;
-}
-
-/*
-** GPTLenable_gpu: enable timers
-**
-** Return value: 0 (success)
-*/
-  __device__ int GPTLenable_gpu (void)
-{
-  disabled = false;
-  return 0;
-}
-
-/*
-** GPTLdisable_gpu: disable timers
-**
-** Return value: 0 (success)
-*/
-__device__ int GPTLdisable_gpu (void)
-{
-  disabled = true;
-  return 0;
+  return SUCCESS;
 }
 
 /*
@@ -579,8 +478,8 @@ __device__ int GPTLdisable_gpu (void)
 */
 __device__ int GPTLreset_gpu (void)
 {
-  int w;             /* index over warps */
-  Timer *ptr;        /* linked list index */
+  int w;             // index over warps
+  Timer *ptr;        // linked list index
   static const char *thisfunc = "GPTLreset_gpu";
 
   if ( ! initialized)
@@ -597,7 +496,7 @@ __device__ int GPTLreset_gpu (void)
   if (verbose)
     printf ("%s: accumulators for all GPU timers set to zero\n", thisfunc);
 
-  return 0;
+  return SUCCESS;
 }
 
 /*
@@ -677,7 +576,7 @@ __device__ static inline Timer *getentry (const Hashentry *hashtable, /* hash ta
 */
 __device__ static int init_placebo ()
 {
-  return 0;
+  return SUCCESS;
 }
 
 __device__ static inline long long utr_placebo ()
@@ -698,7 +597,7 @@ __device__ static inline int get_warp_num ()
     + threadIdx.x;
 
   if (threadId % WARPSIZE != 0)
-    return NOT_ROOT_OF_WARP;
+    return NOT_WARP_ROOT;
 
   warpId = threadId / WARPSIZE;
 
@@ -716,11 +615,29 @@ __device__ static inline int get_warp_num ()
   return warpId;
 }
 
+__device__ static inline int get_thread_num ()
+{
+  int blockId = blockIdx.x 
+    + blockIdx.y * gridDim.x 
+    + gridDim.x * gridDim.y * blockIdx.z; 
+  int threadId = blockId * (blockDim.x * blockDim.y * blockDim.z)
+    + (threadIdx.z * (blockDim.x * blockDim.y))
+    + (threadIdx.y * blockDim.x)
+    + threadIdx.x;
+
+  return threadId;
+}
+
 __device__ int GPTLget_gpusizes (int nwarps_found_out[], int nwarps_timed_out[])
 {
+  static const char *thisfunc = "GPTLget_gpusizes";
+
+  if (get_warp_num () != 0)
+    return GPTLerror_1s ("%s: Need to be thread 0 of warp 0\n", thisfunc);
+
   nwarps_found_out[0] = nwarps_found;
   nwarps_timed_out[0] = nwarps_timed;
-  return 0;
+  return SUCCESS;
 }
 
 //JR want to use variables to dimension arrays but nvcc is not C99 compliant
@@ -751,7 +668,7 @@ __device__ int GPTLfill_gpustats (Gpustats gpustats[MAX_GPUTIMERS],
       printf ("%s: Timer=%s: Truncating timer results at n=%d name=%s:" 
 	      "Increase MAX_GPUTIMERS\n", thisfunc, n, ptr->name);
       *ngputimers = n;
-      return 0;
+      return SUCCESS;
     }
     w = 0;
     init_gpustats (&gpustats[n], ptr, w);
@@ -774,7 +691,7 @@ __device__ int GPTLfill_gpustats (Gpustats gpustats[MAX_GPUTIMERS],
 	  printf ("%s: Timer=%s: Truncating timer results at n=%d name=%s: "
 		  "Increase MAX_GPUTIMERS\n", thisfunc, n, ptr->name);
 	  *ngputimers = n;
-	  return 0;
+	  return SUCCESS;
 	}
 	init_gpustats (&gpustats[n], ptr, w);
 	printf ("%s: Found non-root entry for name=%s at warp=%d\n", 
@@ -810,7 +727,7 @@ __device__ int GPTLfill_gpustats (Gpustats gpustats[MAX_GPUTIMERS],
   }
 
   *ngputimers = n;
-  return 0;
+  return SUCCESS;
 }
 
 __device__ static void init_gpustats (Gpustats *gpustats, Timer *ptr, int w)
@@ -919,7 +836,7 @@ __host__ int GPTLget_gpu_props (int *khz, int *warpsize, int *devnum)
 
   if ((err = cudaGetDeviceProperties (&prop, 0)) != cudaSuccess) {
     printf ("%s: error:%s", thisfunc, cudaGetErrorString (err));
-    return -1;
+    return FAILURE;
   }
 
   *khz      = prop.clockRate;
@@ -934,12 +851,12 @@ __host__ int GPTLget_gpu_props (int *khz, int *warpsize, int *devnum)
     if ((err = cudaDeviceSetLimit (cudaLimitMallocHeapSize, heap_mb * onemb))
 	!= cudaSuccess) {
       printf ("%s: error:%s\n", thisfunc, cudaGetErrorString (err));
-      return -1;
+      return FAILURE;
     }
     err = cudaDeviceGetLimit (&size, cudaLimitMallocHeapSize);
     printf ("CUDA now says limit=%d MB\n", size / onemb);
   }
-  return 0;
+  return SUCCESS;
 }
 
 // Overhead estimate functions start here
@@ -948,7 +865,7 @@ __host__ int GPTLget_gpu_props (int *khz, int *warpsize, int *devnum)
 ** they should just have zeros in them.
 ** 
 ** Output args:
-**   get_warp_num_ohd: Getting my warp index
+**   get_warp_num_ohd:   Getting my warp index
 **   genhashidx_ohd:     Generating hash index
 **   getentry_ohd:       Finding entry in hash table
 **   utr_ohd:            Underlying timer routine
@@ -1035,7 +952,7 @@ __device__ int GPTLget_overhead_gpu (long long ftn_ohd[1],
   self_ohd[0]   = utr_ohd[0];
   parent_ohd[0] = utr_ohd[0] + 2*(ftn_ohd[0] + get_warp_num_ohd[0] + 
 				  genhashidx_ohd[0] + getentry_ohd[0]);
-  return 0;
+  return SUCCESS;
 }
 
 /*
@@ -1055,7 +972,7 @@ __device__ static int gptlstart_sim (char *name, long long nc)
   for (int n = 0; n < nc; ++n)
     cname[n] = name[n];
   cname[nc] = '\0';
-  return 0;
+  return SUCCESS;
 }
 
 __device__ int GPTLget_memstats_gpu (float hashmem [1], float regionmem [1])
@@ -1063,6 +980,10 @@ __device__ int GPTLget_memstats_gpu (float hashmem [1], float regionmem [1])
   Timer *ptr;               /* walk through linked list */
   int numtimers;            /* number of timers */
   int w;                    // warp index
+  static const char *thisfunc = "GPTLget_memstats_gpu";
+
+  if (get_warp_num () != 0)
+    return GPTLerror_1s ("%s: Need to be thread 0 of warp 0\n", thisfunc);
 
   regionmem[0] = 0.;
   hashmem[0] = (float) sizeof (Hashentry) * tablesize * maxwarps;  // fixed size of table
@@ -1074,7 +995,27 @@ __device__ int GPTLget_memstats_gpu (float hashmem [1], float regionmem [1])
     hashmem[0]   += (float) numtimers * sizeof (Timer *);
     regionmem[0] += (float) numtimers * sizeof (Timer);
   }
-  return 0;
+  return SUCCESS;
+}
+
+__device__ int GPTLmy_sleep (float seconds)
+{
+  long long start, now;
+  double delta;
+  static const char *thisfunc = "GPTLmy_sleep";
+
+  if (gpu_hz == 0.)
+    return GPTLerror_1s ("%s: need to set gpu_hz via call to GPTLinitialize_gpu() first\n",
+			 thisfunc);
+
+  start = clock64();
+  do {
+    now = clock64();
+    delta = (now - start) / gpu_hz;
+  } while (delta < seconds);
+
+  __syncthreads();
+  return SUCCESS;
 }
 
 __device__ void GPTLdummy_gpu (int num)

@@ -150,9 +150,7 @@ extern Timer **GPTLget_timersaddr (void);
 */
 #ifdef ENABLE_ACC
 extern int GPTLget_gpu_props (int *, int *, int *);
-extern int GPTLinitialize_gpu (const int, const int, const int);
-extern int GPTLenable_gpu (void);
-extern int GPTLdisable_gpu (void);
+extern int GPTLinitialize_gpu (const int, const int, const int, const double);
 extern int GPTLreset_gpu (void);
 extern int GPTLget_gpu_freq (void);
 extern void GPTLprint_gpustats (FILE *fp, double gpu_hz, int, int);

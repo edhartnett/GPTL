@@ -17,8 +17,8 @@
 // Max number of allowed colliding entries in hash table
 #define MAXENT 2
 
-#define NOT_ROOT_OF_WARP -2
-#define WARPID_GT_MAXWARPS -3
+#define NOT_WARP_ROOT -1
+#define WARPID_GT_MAXWARPS -2
 
 typedef struct {
   long long last;           /* timestamp from last call */
@@ -31,7 +31,6 @@ typedef struct TIMER {
   Wallstats wall;           /* wallclock stats */
   unsigned long count;      /* number of start/stop calls */
   struct TIMER *next;       /* next timer in linked list */
-  unsigned int recurselvl;  /* recursion level */
   bool onflg;               /* timer currently on or off */
   bool beenprocessed;       // keep track of which timers in which warps have been processed
   char name[MAX_CHARS+1];   /* timer name (user input) */
@@ -46,8 +45,6 @@ typedef struct {
 extern "C" {
 /* These are user callable */
 __device__ extern int GPTLfinalize_gpu (void);
-__device__ extern int GPTLenable_gpu (void);
-__device__ extern int GPTLdisable_gpu (void);
 __device__ extern int GPTLreset_gpu (void);
 
   /* These are callable from within gptl.cu */

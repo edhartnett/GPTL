@@ -10,6 +10,9 @@
 #ifndef GPTL_DH
 #define GPTL_DH
 
+#define SUCCESS 0
+#define FAILURE -1
+
 #define MAX_CHARS 63
 #ifdef ENABLE_ACC
 // Warpsize will be verified by the library

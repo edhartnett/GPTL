@@ -172,6 +172,6 @@ endif
 # Whether to enable nVidia-based GPU timers as well as CPU timers
 ENABLE_ACC = yes
 ifeq ($(ENABLE_ACC),yes)
-  CFLAGS += -DENABLE_ACC -Mcuda=cuda8
+  CFLAGS += -DENABLE_ACC
   GPULIB = gptl_cuda
 endif

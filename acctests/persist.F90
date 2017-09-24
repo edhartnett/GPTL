@@ -10,6 +10,7 @@ program persist
   integer :: maxthreads_gpu = 3584
   integer :: outerlooplen
   integer :: innerlooplen = 100
+  integer :: mostwork = 1000
   integer :: balfact = 1
   integer :: niter
   integer :: ans
@@ -19,9 +20,11 @@ program persist
   real, allocatable :: vals(:)
   real, external :: doalot, doalot2
 
+  call getval (mostwork, 'mostwork')
   call getval (maxthreads_gpu, 'maxthreads_gpu')
-  call getval_real (factor, 'factor: maxthreads * FACTOR = outerlooplen')
-  outerlooplen = maxthreads_gpu * nint (factor)
+!  call getval_real (factor, 'factor: maxthreads * FACTOR = outerlooplen')
+  outerlooplen = maxthreads_gpu
+  call getval (outerlooplen, 'outerlooplen')
   write(6,*)'outerlooplen=',outerlooplen
   call getval (innerlooplen, 'innerlooplen')
   call getval (balfact, 'balfact: 0=LtoR 1=balanced 2=RtoL')
@@ -43,18 +46,33 @@ program persist
   ret = gptlinit_handle_gpu ('a', handle2)
 !$acc end parallel
 
-  ret = gptlstart ('doalot_cpu')
+  ret = gptlstart ('all_gpuloops')
+
+  ret = gptlstart ('do_nothing_cpu')
 !$acc parallel loop private(niter) copyin(balfact,handle,handle2) copyout(ret, vals)
-  do n=1,outerlooplen
+  do n=0,outerlooplen-1
+    ret = gptlstart_gpu ('all_gpucalls')
+    ret = gptlstart_gpu ('do_nothing_gpu')
+    ret = gptlstop_gpu ('do_nothing_gpu')
+    ret = gptlstop_gpu ('all_gpucalls')
+  end do
+!$acc end parallel
+  ret = gptlstop ('do_nothing_cpu')
+
+  ret = gptlstart ('doalot_cpu')
+!$acc parallel loop private(niter,factor) copyin(balfact,handle,handle2) copyout(ret, vals)
+  do n=0,outerlooplen-1
+    ret = gptlstart_gpu ('all_gpucalls')
+    factor = real(n) / real(outerlooplen-1)
     select case (balfact)
     case (0)
-      niter = n
+      niter = int(factor * mostwork)
     case (1)
-      niter = outerlooplen
+      niter = mostwork
     case (2)
-      niter = outerlooplen - n + 1
+      niter = mostwork - int(factor * mostwork)
     end select
-    
+
     ret = gptlstart_gpu ('doalot_log')
     vals(n) = doalot (niter, innerlooplen)
     ret = gptlstop_gpu ('doalot_log')
@@ -74,22 +92,25 @@ program persist
     ret = gptlstart_handle_gpu_c ('a'//char(0), handle2)
     vals(n) = doalot2 (niter, innerlooplen)
     ret = gptlstop_handle_gpu_c ('a'//char(0), handle2)
+    ret = gptlstop_gpu ('all_gpucalls')
   end do
 !$acc end parallel
   ret = gptlstop ('doalot_cpu')
-
+  ret = gptlstop ('all_gpuloops')
+  
   ret = gptlstart ('doalot_cpu_nogputimers')
-
-!$acc parallel loop private(niter) copyin(balfact) copyout(vals)
-  do n=1,outerlooplen
+!$acc parallel loop private(niter,factor) copyin(balfact) copyout(vals)
+  do n=0,outerlooplen-1
+    factor = real(n) / real(outerlooplen-1)
     select case (balfact)
     case (0)
-      niter = n
+      niter = int(factor * mostwork)
     case (1)
-      niter = outerlooplen
+      niter = mostwork
     case (2)
-      niter = outerlooplen - n + 1
+      niter = mostwork - int(factor * mostwork)
     end select
+    
     vals(n) = doalot (niter, innerlooplen)
     vals(n) = doalot2 (niter, innerlooplen)
     vals(n) = doalot2 (niter, innerlooplen)
@@ -98,6 +119,23 @@ program persist
   end do
 !$acc end parallel
   ret = gptlstop ('doalot_cpu_nogputimers')
+
+  write(6,*)'Sleeping 1 second on GPU...'
+  ret = gptlstart ('all_gpuloops')
+  ret = gptlstart ('sleep1ongpu')
+!$acc parallel loop private(ret)
+  do n=1,outerlooplen
+    ret = gptlstart_gpu ('all_gpucalls')
+    ret = gptlstart_gpu ('sleep1')
+    ret = gptlmy_sleep (1.)
+    ret = gptlstop_gpu ('sleep1')
+    ret = gptlstop_gpu ('all_gpucalls')
+  end do
+!$acc end parallel
+
+  ret = gptlstop ('sleep1ongpu')
+  ret = gptlstop ('all_gpuloops')
+
   ret = gptlpr (0)
 end program persist
 

@@ -32,6 +32,7 @@ program persist
 !JR NOTE: gptlinitialize call increases mallocable memory size on GPU. That call will fail
 !JR if any GPU activity happens before the call to gptlinitialize
   ret = gptlsetoption (gptlmaxthreads_gpu, maxthreads_gpu)
+  ret = gptlsetoption (gptltablesize_gpu, 32)   ! This setting gives 1 collision
   write(6,*)'persist: calling gptlinitialize'
   ret = gptlinitialize ()
 !$acc kernels

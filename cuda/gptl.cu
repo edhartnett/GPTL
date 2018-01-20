@@ -200,7 +200,8 @@ __device__ int GPTLstart_gpu (const char *name)               /* timer name */
 
   if ( ! ptr) { /* Add a new entry and initialize */
     if (hashtable[w][indx].nument > MAXENT-1)
-      return GPTLerror_2s ("%s: %s caused too many hash collisions\n", thisfunc, name);
+      return GPTLerror_2s1d ("%s: %s caused too many hash collisions (%d)\n", 
+			     thisfunc, name, hashtable[w][indx].nument-1);
     if ((ptr = (Timer *) GPTLallocate_gpu (sizeof (Timer), thisfunc)) == NULL)
       return GPTLerror_2s ("%s: malloc failure for timer %s\n", thisfunc, name);
     memset (ptr, 0, sizeof (Timer));
@@ -283,7 +284,8 @@ __device__ int GPTLstart_handle_gpu (const char *name,  /* timer name */
   ptr = getentry (hashtable[w], name, (unsigned int) *handle);  
   if ( ! ptr) { /* Add a new entry and initialize */
     if (hashtable[w][*handle].nument > MAXENT-1)
-      return GPTLerror_2s ("%s: %s caused too many hash collisions\n", thisfunc, name);
+      return GPTLerror_2s1d ("%s: %s caused too many hash collisions (%d)\n", 
+			     thisfunc, name, hashtable[w][*handle].nument-1);
     if ((ptr = (Timer *) GPTLallocate_gpu (sizeof (Timer), thisfunc)) == NULL)
       return GPTLerror_2s ("%s: malloc failure for timer %s\n", thisfunc, name);
     memset (ptr, 0, sizeof (Timer));
@@ -643,10 +645,13 @@ __device__ int GPTLget_gpusizes (int nwarps_found_out[], int nwarps_timed_out[])
 //JR want to use variables to dimension arrays but nvcc is not C99 compliant
 __device__ int GPTLfill_gpustats (Gpustats gpustats[MAX_GPUTIMERS], 
                                   int *max_name_len_out,
-				  int *ngputimers)
+				  int *ngputimers,
+				  int *collisions_out)
 {
   int w,ww;          // warp indices
   int n;             // timer index
+  int i;
+  int collisions;
   Timer *ptr, *tptr; // loop through linked list
   static const char *thisfunc = "GPTLfill_gpustats";
 
@@ -725,8 +730,23 @@ __device__ int GPTLfill_gpustats (Gpustats gpustats[MAX_GPUTIMERS],
       }
     }
   }
-
   *ngputimers = n;
+
+  // Step 4: Print collision info (for warp 0 only)
+  w = 0;
+  collisions = 0;
+  for (i = 0; i < tablesize; i++) {
+    if (hashtable[w][i].nument > 1) {
+      printf ("%s collided with %s", hashtable[w][i].entries[0]->name,  hashtable[w][i].entries[1]->name);
+      for (n = 2; n < hashtable[w][i].nument; ++n)
+	printf (" and %s", hashtable[w][i].entries[n]->name);
+      printf ("\n");
+      collisions += hashtable[w][i].nument - 1;
+    }
+  }
+  printf ("Total collisions warp 0=%d\n", collisions);
+  *collisions_out = collisions;
+
   return SUCCESS;
 }
 

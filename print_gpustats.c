@@ -13,7 +13,7 @@ extern int GPTLget_overhead_gpu (long long [],            /* Fortran overhead */
 				 long long [],            /* Underlying timing routine */
 				 long long [],            /* self_ohd */
 				 long long []);           /* parent_ohd */
-extern int GPTLfill_gpustats (Gpustats [], int [], int []);
+extern int GPTLfill_gpustats (Gpustats [], int [], int [], int []);
 
 #pragma acc routine (GPTLget_gpusizes) seq
 #pragma acc routine (GPTLfill_gpustats) seq 
@@ -27,6 +27,7 @@ void GPTLprint_gpustats (FILE *fp, double gpu_hz, int maxthreads_gpu, int devnum
   int nwarps_timed[1];
   int max_name_len_gpu[1];
   int ngputimers[1];
+  int ncollisions[1];
 
   // Returned from GPTLget_overhead_gpu:
   long long ftn_ohdgpu[1];            // Fortran wrapper overhead
@@ -98,8 +99,8 @@ void GPTLprint_gpustats (FILE *fp, double gpu_hz, int maxthreads_gpu, int devnum
 	   utr_ohdgpu[0] / gpu_hz, utr_ohdgpu[0] * 100. / (tot_ohdgpu * gpu_hz) );
 
   printf ("%s: calling gpu kernel GPTLfill_gpustats...\n", thisfunc);
-#pragma acc kernels copyout(ret, gpustats, max_name_len_gpu, ngputimers)
-  ret = GPTLfill_gpustats (gpustats, max_name_len_gpu, ngputimers);
+#pragma acc kernels copyout(ret, gpustats, max_name_len_gpu, ngputimers, ncollisions)
+  ret = GPTLfill_gpustats (gpustats, max_name_len_gpu, ngputimers, ncollisions);
   printf ("%s: returned from GPTLfill_gpustats: printing results\n", thisfunc);
 
   fprintf (fp, "\nGPU timing stats\n");
@@ -112,6 +113,7 @@ void GPTLprint_gpustats (FILE *fp, double gpu_hz, int maxthreads_gpu, int devnum
   fprintf (fp, "Overhead estimates self_OH and parent_OH are for warp with \'maxcount\' calls\n");
   fprintf (fp, "OHD estimate assumes Fortran, and non-handle routines used\n");
   fprintf (fp, "Actual overhead can be reduced by using \'handle\' routines and \'_c\' Fortran routines\n");
+  fprintf (fp, "Total collisions warp 0=%d\n", ncollisions[0]);
   // Print header, padding to length of longest name
   extraspace = max_name_len_gpu[0] - 4; // "name" is 4 chars
   for (i = 0; i < extraspace; ++i)

@@ -175,3 +175,6 @@ ifeq ($(ENABLE_ACC),yes)
   CFLAGS += -DENABLE_ACC
   GPULIB = gptl_cuda
 endif
+
+# Whether to enable printing of when variable onflg is changed
+ENABLE_NOTIFY_ONFLG = no

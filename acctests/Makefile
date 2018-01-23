@@ -11,21 +11,25 @@ endif
 # DO NOT ADD THIS FLAG: IT SCREWS UP THE OUTPUT!!!
 #FFLAGS += -Mcuda
 
-OBJS1 = persist.o
-OBJS2 = persist_mpi.o
-OBJS = $(OBJS1) $(OBJS2)
+COMMONOBJS = persist.o getval.o
+MPROG1 = driver_serial.o
+MPROG2 = driver_mpi.o
+OBJS1 = $(MPROG1) $(COMMONOBJS)
+OBJS2 = $(MPROG2)  $(COMMONOBJS)
 
 %.o: %.F90
 	$(FC) -c $< $(FFLAGS)
 
-all: persist persist_mpi
+all: driver_serial driver_mpi
 
-persist: $(OBJS1) ../libgptl.a ../cuda/libgptl_cuda.a
+driver_serial: $(OBJS1) ../libgptl.a ../cuda/libgptl_cuda.a
 	$(FC) -o $@ $(OBJS1) $(LDFLAGS)
 
-persist_mpi: $(OBJS2) ../libgptl.a ../cuda/libgptl_cuda.a
+driver_mpi: $(OBJS2) ../libgptl.a ../cuda/libgptl_cuda.a
 	$(FC) -o $@ $(OBJS2) $(LDFLAGS)
 
 clean:
-	$(RM) $(OBJS) *.gpu persist persist_mpi
+	$(RM) $(MPROG1) $(MPROG2) $(OBJS1) $(OBJS2) *.gpu driver_serial driver_mpi
 
+$(MPROG1): getval.o
+$(MPROG2): getval.o

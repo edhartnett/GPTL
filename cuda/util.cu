@@ -7,8 +7,8 @@
 
 #include "private.h"
 
-__device__ static int max_errors = 1; /* max number of error print msgs */
-__device__ static int num_errors = 0; /* number of times GPTLerror was called */
+__device__ static int max_errors = 10; // max number of error print msgs (per warp)
+__device__ static int num_errors = 0;  // number of times GPTLerror was called
 
 #define MAXSTR 256
 
@@ -29,11 +29,13 @@ __device__ int GPTLerror_1u1d (const char *fmt, const unsigned int arg1, const i
 {
   static const char *thisfunc = "GPTLerror_1u1d";
 
-  (void) printf ("%s: GPTL error:", thisfunc);
-  (void) printf (fmt, arg1, arg2);
-  if (num_errors == max_errors)
-    (void) printf ("Truncating further error print now after %d msgs", num_errors);
-  ++num_errors;
+  if (num_errors < max_errors) {
+    (void) printf ("%s: GPTL error:", thisfunc);
+    (void) printf (fmt, arg1, arg2);
+    ++num_errors;
+    if (num_errors == max_errors)
+      (void) printf ("Truncating further error print now after %d msgs\n", num_errors);
+  }
   return -1;
 }
 
@@ -41,11 +43,13 @@ __device__ int GPTLerror_1s (const char *fmt, const char *str)
 {
   static const char *thisfunc = "GPTLerror_1s";
 
-  (void) printf ("%s: GPTL error:", thisfunc);
-  (void) printf (fmt, str);
-  if (num_errors == max_errors)
-    (void) printf ("Truncating further error print now after %d msgs", num_errors);
-  ++num_errors;
+  if (num_errors < max_errors) {
+    (void) printf ("%s: GPTL error:", thisfunc);
+    (void) printf (fmt, str);
+    ++num_errors;
+    if (num_errors == max_errors)
+      (void) printf ("Truncating further error print now after %d msgs\n", num_errors);
+  }
   return -1;
 }
 
@@ -53,11 +57,13 @@ __device__ int GPTLerror_2s (const char *fmt, const char *str1, const char *str2
 {
   static const char *thisfunc = "GPTLerror_2s";
 
-  (void) printf ("%s: GPTL error:", thisfunc);
-  (void) printf (fmt, str1, str2);
-  if (num_errors == max_errors)
-    (void) printf ("Truncating further error print now after %d msgs", num_errors);
-  ++num_errors;
+  if (num_errors < max_errors) {
+    (void) printf ("%s: GPTL error:", thisfunc);
+    (void) printf (fmt, str1, str2);
+    ++num_errors;
+    if (num_errors == max_errors)
+      (void) printf ("Truncating further error print now after %d msgs\n", num_errors);
+  }
   return -1;
 }
 
@@ -65,11 +71,13 @@ __device__ int GPTLerror_1s1d (const char *fmt, const char *str1, const int arg)
 {
   static const char *thisfunc = "GPTLerror_1s1d";
 
-  (void) printf ("%s: GPTL error:", thisfunc);
-  (void) printf (fmt, str1, arg);
-  if (num_errors == max_errors)
-    (void) printf ("Truncating further error print now after %d msgs", num_errors);
-  ++num_errors;
+  if (num_errors < max_errors) {
+    (void) printf ("%s: GPTL error:", thisfunc);
+    (void) printf (fmt, str1, arg);
+    ++num_errors;
+    if (num_errors == max_errors)
+      (void) printf ("Truncating further error print now after %d msgs\n", num_errors);
+  }
   return -1;
 }
 
@@ -77,11 +85,13 @@ __device__ int GPTLerror_2s1d (const char *fmt, const char *str1, const char *st
 {
   static const char *thisfunc = "GPTLerror_2s1d";
 
-  (void) printf ("%s: GPTL error:", thisfunc);
-  (void) printf (fmt, str1, str2, arg1);
-  if (num_errors == max_errors)
-    (void) printf ("Truncating further error print now after %d msgs", num_errors);
-  ++num_errors;
+  if (num_errors < max_errors) {
+    (void) printf ("%s: GPTL error:", thisfunc);
+    (void) printf (fmt, str1, str2, arg1);
+    ++num_errors;
+    if (num_errors == max_errors)
+      (void) printf ("Truncating further error print now after %d msgs\n", num_errors);
+  }
   return -1;
 }
 
@@ -89,11 +99,13 @@ __device__ int GPTLerror_1s2d (const char *fmt, const char *str1, const int arg1
 {
   static const char *thisfunc = "GPTLerror_1s2d";
 
-  (void) printf ("%s: GPTL error:", thisfunc);
-  (void) printf (fmt, str1, arg1, arg2);
-  if (num_errors == max_errors)
-    (void) printf ("Truncating further error print now after %d msgs", num_errors);
-  ++num_errors;
+  if (num_errors < max_errors) {
+    (void) printf ("%s: GPTL error:", thisfunc);
+    (void) printf (fmt, str1, arg1, arg2);
+    ++num_errors;
+    if (num_errors == max_errors)
+      (void) printf ("Truncating further error print now after %d msgs\n", num_errors);
+  }
   return -1;
 }
 
@@ -101,11 +113,13 @@ __device__ int GPTLerror_1s1d1s (const char *fmt, const char *str1, const int ar
 {
   static const char *thisfunc = "GPTLerror_1s1d1s";
 
-  (void) printf ("%s: GPTL error:", thisfunc);
-  (void) printf (fmt, str1, arg, str2);
-  if (num_errors == max_errors)
-    (void) printf ("Truncating further error print now after %d msgs", num_errors);
-  ++num_errors;
+  if (num_errors < max_errors) {
+    (void) printf ("%s: GPTL error:", thisfunc);
+    (void) printf (fmt, str1, arg, str2);
+    ++num_errors;
+    if (num_errors == max_errors)
+      (void) printf ("Truncating further error print now after %d msgs\n", num_errors);
+  }
   return -1;
 }
 

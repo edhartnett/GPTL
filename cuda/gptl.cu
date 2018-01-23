@@ -346,6 +346,10 @@ __device__ static inline int update_ptr (Timer *ptr, const int w)
   long long tp2;    /* time stamp */
 
   ptr->onflg = true;
+#ifdef NOTIFY_ONFLG
+  if (w == 0)
+    printf ("update_ptr: Setting %p->onflg=true\n", ptr);
+#endif
   tp2 = clock64 ();
   ptr->wall.last = tp2;
   return SUCCESS;
@@ -382,9 +386,15 @@ __device__ int GPTLstop_gpu (const char *name)               /* timer name */
     return GPTLerror_1s1d1s ("%s warp %d: timer for %s had not been started.\n",
 			     thisfunc, w, name);
 
-  if ( ! ptr->onflg )
-    return GPTLerror_2s ("%s: timer %s was already off.\n", 
-			 thisfunc, ptr->name);
+#ifdef NOTIFY_ONFLG
+  if (w == 0)
+    printf ("%s: %p->onflg=%d\n", thisfunc, ptr, (int) ptr->onflg);
+#endif
+
+  if ( ! ptr->onflg ) {
+    return GPTLerror_1s1d1s ("%s warp %d: timer %s was already off.\n", 
+			     thisfunc, w, ptr->name);
+  }
 
   ++ptr->count;
   (void) update_stats (ptr, tp1, w);

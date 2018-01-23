@@ -4,6 +4,10 @@ FC      = pgfortran
 FFLAGS  = -acc -Minfo=accel -Minfo -ta=tesla:cc60
 CU      = nvcc
 CUFLAGS = -UDEBUG -DENABLE_ACC $(UNDERSCORING) -G -O0 -ftz=true -gencode arch=compute_60,code=compute_60 -rdc=true
+# Added diagnostic print
+ifeq ($(ENABLE_NOTIFY_ONFLG),yes)
+  CUFLAGS += -DNOTIFY_ONFLG
+endif
 ARFLAGS = ruv
 
 OBJS = GPUinit.o gptl.o util.o f_wrappers.o gptl_acc.o

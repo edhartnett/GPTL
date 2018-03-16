@@ -29,7 +29,7 @@ driver_mpi: $(OBJS2) ../libgptl.a ../cuda/libgptl_cuda.a
 	$(FC) -o $@ $(OBJS2) $(LDFLAGS)
 
 clean:
-	$(RM) $(MPROG1) $(MPROG2) $(OBJS1) $(OBJS2) *.gpu driver_serial driver_mpi
+	$(RM) $(MPROG1) $(MPROG2) $(OBJS1) $(OBJS2) *.mod *.gpu driver_serial driver_mpi
 
 $(MPROG1): getval.o
 $(MPROG2): getval.o

@@ -14,8 +14,8 @@
 */
 
 extern "C" {
-__device__ extern int GPTLstart_gpu (const char *);
 __device__ extern int GPTLinit_handle_gpu (const char *, int *);
+__device__ extern int GPTLstart_gpu (const char *);
 __device__ extern int GPTLstart_handle_gpu (const char *, int *);
 __device__ extern int GPTLstop_gpu (const char *);
 __device__ extern int GPTLstop_handle_gpu (const char *, const int *);

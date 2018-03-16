@@ -39,15 +39,35 @@
 extern "C" {
 
 /* Local function prototypes */
-__device__ int gptlstart_gpu (char *, long long);
 __device__ int gptlinit_handle_gpu (const char *, int *, long long);
+
+__device__ int gptlstart_gpu (char *, long long);
+__device__ int gptlstart_gpu_c (char *, long long);
 __device__ int gptlstart_handle_gpu (const char *, int *, long long);
+__device__ int gptlstart_handle_gpu_c (const char *, int *, long long);
+
 __device__ int gptlstop_gpu (const char *, long long);
+__device__ int gptlstop_gpu_c (const char *, long long);
 __device__ int gptlstop_handle_gpu (const char *, const int *, long long);
+__device__ int gptlstop_handle_gpu_c (const char *, const int *, long long);
 /* Fortran wrapper functions start here */
 
 //JR Cannot dimension local cname[nc] because nc is an input argument
 //JR Maybe a C99-compliancy issue?
+__device__ int gptlinit_handle_gpu (const char *name, int *handle, long long nc)
+{
+  register char cname[MAX_CHARS+1];
+  const char *thisfunc = "gptlinit_handle_gpu";
+
+  if (nc > MAX_CHARS)
+    return GPTLerror_1s2d ("%s: %d exceeds MAX_CHARS=%d\n", thisfunc, nc, MAX_CHARS);
+
+  for (int n = 0; n < nc; ++n)
+    cname[n] = name[n];
+  cname[nc] = '\0';
+  return GPTLinit_handle_gpu (cname, handle);
+}
+
 __device__ int gptlstart_gpu (char *name, long long nc)
 {
   register char cname[MAX_CHARS+1];
@@ -65,20 +85,6 @@ __device__ int gptlstart_gpu (char *name, long long nc)
 __device__ int gptlstart_gpu_c (char *name, long long nc)
 {
   return GPTLstart_gpu (name);
-}
-
-__device__ int gptlinit_handle_gpu (const char *name, int *handle, long long nc)
-{
-  register char cname[MAX_CHARS+1];
-  const char *thisfunc = "gptlinit_handle_gpu";
-
-  if (nc > MAX_CHARS)
-    return GPTLerror_1s2d ("%s: %d exceeds MAX_CHARS=%d\n", thisfunc, nc, MAX_CHARS);
-
-  for (int n = 0; n < nc; ++n)
-    cname[n] = name[n];
-  cname[nc] = '\0';
-  return GPTLinit_handle_gpu (cname, handle);
 }
 
 __device__ int gptlstart_handle_gpu (const char *name, int *handle, long long nc)
@@ -117,6 +123,20 @@ __device__ int gptlstop_gpu (const char *name, long long nc)
 __device__ int gptlstop_gpu_c (const char *name, long long nc)
 {
   return GPTLstop_gpu (name);
+}
+
+__device__ int gptlstop_handle_gpu (const char *name, const int *handle, long long nc)
+{
+  register char cname[MAX_CHARS+1];
+  const char *thisfunc = "gptlstop_handle_gpu";
+
+  if (nc > MAX_CHARS)
+    return GPTLerror_1s2d ("%s: %d exceeds MAX_CHARS=%d\n", thisfunc, nc, MAX_CHARS);
+
+  for (int n = 0; n < nc; ++n)
+    cname[n] = name[n];
+  cname[nc] = '\0';
+  return GPTLstop_handle_gpu (cname, handle);
 }
 
 __device__ int gptlstop_handle_gpu_c (const char *name, const int *handle, long long nc)

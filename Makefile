@@ -164,6 +164,7 @@ install: lib$(LIBNAME).a
 ifeq ($(ENABLE_ACC),yes)
 	install -m 0644 cuda/lib$(LIBNAME)_cuda.a $(INSTALLDIR)/lib
 	install -m 0644 cuda/gptl_acc.h $(INSTALLDIR)/include
+	install -m 0644 cuda/gptl_acc.inc $(INSTALLDIR)/include
 	install -m 0644 cuda/gptl_acc.mod $(INSTALLDIR)/include
 endif
 ifeq ($(FORTRAN),yes)

@@ -60,6 +60,7 @@ int GPTLget_overhead (FILE *fp,
   unsigned int hashidx;      /* Hash index */
   int randomvar;             /* placeholder for taking the address of a variable */
   Timer *entry;              /* placeholder for return from "getentry()" */
+  static char *timername = "timername";
   static const char *thisfunc = "GPTLget_overhead";
 
   /*
@@ -70,7 +71,7 @@ int GPTLget_overhead (FILE *fp,
 #pragma unroll(10)
   for (i = 0; i < 1000; ++i) {
     /* 9 is the number of characters in "timername" */
-    ret = gptlstart_sim ("timername", 9);
+    ret = gptlstart_sim (timername, 9);
   }
   t2 = (*ptr2wtimefunc)();
   ftn_ohd = 0.001 * (t2 - t1);
@@ -88,7 +89,7 @@ int GPTLget_overhead (FILE *fp,
   t1 = (*ptr2wtimefunc)();
 #pragma unroll(10)
   for (i = 0; i < 1000; ++i) {
-    hashidx = genhashidx ("timername");
+    hashidx = genhashidx (timername);
   }
   t2 = (*ptr2wtimefunc)();
   genhashidx_ohd = 0.001 * (t2 - t1);
@@ -115,7 +116,7 @@ int GPTLget_overhead (FILE *fp,
     fprintf (fp, "%s: hash table empty: Using alternate means to find getentry time\n", thisfunc);
     t1 = (*ptr2wtimefunc)();
     for (i = 0; i < 1000; ++i)
-      entry = getentry (hashtable, "timername", hashidx);
+      entry = getentry (hashtable, timername, hashidx);
     t2 = (*ptr2wtimefunc)();
   }
   getentry_ohd = 0.001 * (t2 - t1);

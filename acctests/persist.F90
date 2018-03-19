@@ -41,8 +41,7 @@ subroutine persist (myrank, mostwork, maxthreads_gpu, outerlooplen, innerlooplen
   ret = gptlinit_handle_gpu ('a', handle2)
 !$acc end parallel
 
-  ret = gptlstart ('all_gpuloops')
-
+  ret = gptlstart ('gpu_fromcpu')
   ret = gptlstart ('do_nothing_cpu')
 !$acc parallel loop copyin(balfact,handle,handle2) copyout(ret)
   do n=0,outerlooplen-1
@@ -53,7 +52,9 @@ subroutine persist (myrank, mostwork, maxthreads_gpu, outerlooplen, innerlooplen
   end do
 !$acc end parallel
   ret = gptlstop ('do_nothing_cpu')
+  ret = gptlstop ('gpu_fromcpu')
 
+  ret = gptlstart ('gpu_fromcpu')
   ret = gptlstart ('doalot_cpu')
 !$acc parallel loop private(niter,factor) copyin(balfact,handle,handle2) copyout(ret, vals)
   do n=0,outerlooplen-1
@@ -72,9 +73,7 @@ subroutine persist (myrank, mostwork, maxthreads_gpu, outerlooplen, innerlooplen
     vals(n) = doalot_log (niter, innerlooplen)
     ret = gptlstop_gpu ('doalot_log')
 
-    ret = gptlstart_gpu ('doalot_log_inner')
     vals(n) = doalot_log_inner (niter, innerlooplen)
-    ret = gptlstop_gpu ('doalot_log_inner')
 
     ret = gptlstart_gpu ('doalot_sqrt')
     vals(n) = doalot_sqrt (niter, innerlooplen)
@@ -95,32 +94,10 @@ subroutine persist (myrank, mostwork, maxthreads_gpu, outerlooplen, innerlooplen
   end do
 !$acc end parallel
   ret = gptlstop ('doalot_cpu')
-  ret = gptlstop ('all_gpuloops')
+  ret = gptlstop ('gpu_fromcpu')
   
-  ret = gptlstart ('doalot_cpu_nogputimers')
-!$acc parallel loop private(niter,factor) copyin(balfact) copyout(vals)
-  do n=0,outerlooplen-1
-    factor = real(n) / real(outerlooplen-1)
-    select case (balfact)
-    case (0)
-      niter = int(factor * mostwork)
-    case (1)
-      niter = mostwork
-    case (2)
-      niter = mostwork - int(factor * mostwork)
-    end select
-    
-    vals(n) = doalot_log (niter, innerlooplen)
-    vals(n) = doalot_sqrt (niter, innerlooplen)
-    vals(n) = doalot_sqrt (niter, innerlooplen)
-    vals(n) = doalot_sqrt (niter, innerlooplen)
-    vals(n) = doalot_sqrt (niter, innerlooplen)
-  end do
-!$acc end parallel
-  ret = gptlstop ('doalot_cpu_nogputimers')
-
   write(6,*)'Sleeping 1 second on GPU...'
-  ret = gptlstart ('all_gpuloops')
+  ret = gptlstart ('gpu_fromcpu')
   ret = gptlstart ('sleep1ongpu')
 !$acc parallel loop private(ret)
   do n=1,outerlooplen
@@ -131,9 +108,8 @@ subroutine persist (myrank, mostwork, maxthreads_gpu, outerlooplen, innerlooplen
     ret = gptlstop_gpu ('all_gpucalls')
   end do
 !$acc end parallel
-
   ret = gptlstop ('sleep1ongpu')
-  ret = gptlstop ('all_gpuloops')
+  ret = gptlstop ('gpu_fromcpu')
 
   ret = gptlpr (myrank)
 end subroutine persist
@@ -165,11 +141,11 @@ real function doalot_log_inner (n, innerlooplen) result (sum)
 
   sum = 0.
   do iter=1,innerlooplen
-    ret = gptlstart_gpu ('doalot_log_inner_iter')
+    ret = gptlstart_gpu ('doalot_log_inner')
     do i=1,n
       sum = sum + log (real (iter*i))
     end do
-    ret = gptlstop_gpu ('doalot_log_inner_iter')
+    ret = gptlstop_gpu ('doalot_log_inner')
   end do
 end function doalot_log_inner
 

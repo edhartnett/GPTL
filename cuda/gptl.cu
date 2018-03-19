@@ -42,7 +42,7 @@ __device__ static inline char *my_strcpy (char *, const char *);
 __device__ static inline int my_strcmp (const char *, const char *);
 __device__ static void init_gpustats (Gpustats *, Timer *, int);
 __device__ static void fill_gpustats (Gpustats *, Timer *, int);
-__device__ static int gptlstart_sim (char *, long long);
+__device__ static int gptlstart_sim (const char *, long long);
 
 /* These are invoked only from gptl.c */
 __device__ extern int GPTLinitialize_gpu (const int, const int, const int, const double);
@@ -916,6 +916,7 @@ __device__ int GPTLget_overhead_gpu (long long ftn_ohd[1],
   int mywarp;                /* which warp are we */
   unsigned int hashidx;      /* Hash index */
   Timer *entry;              /* placeholder for return from "getentry()" */
+  static char *timername = "timername";
   static const char *thisfunc = "GPTLget_overhead_gpu";
 
   /*
@@ -925,7 +926,7 @@ __device__ int GPTLget_overhead_gpu (long long ftn_ohd[1],
   t1 = clock64();
   for (i = 0; i < 1000; ++i) {
     /* 9 is the number of characters in "timername" */
-    ret = gptlstart_sim ("timername", (long long) 9);
+    ret = gptlstart_sim (timername, (long long) 9);
   }
   t2 = clock64();
   ftn_ohd[0] = 0.001 * (t2 - t1);
@@ -941,7 +942,7 @@ __device__ int GPTLget_overhead_gpu (long long ftn_ohd[1],
   /* genhashidx overhead */
   t1 = clock64();
   for (i = 0; i < 1000; ++i) {
-    hashidx = genhashidx ("timername");
+    hashidx = genhashidx (timername);
   }
   t2 = clock64();
   genhashidx_ohd[0] = (t2 - t1) / 1000;
@@ -992,7 +993,7 @@ __device__ int GPTLget_overhead_gpu (long long ftn_ohd[1],
 **   name: timer name
 **   nc:  number of characters in "name"
 */
-__device__ static int gptlstart_sim (char *name, long long nc)
+__device__ static int gptlstart_sim (const char *name, long long nc)
 {
   char cname[MAX_CHARS+1];
 

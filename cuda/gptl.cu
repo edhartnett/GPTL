@@ -9,7 +9,7 @@
 #include <string.h>        /* memcpy */
 
 #include "./private.h"
-#include "./gptl_acc.h"
+#include "./gptl_cuda.h"
 
 __device__ static Timer **timers = 0;             /* linked list of timers */
 __device__ static Timer **last = 0;               /* last element in list */
@@ -49,7 +49,7 @@ __device__ extern int GPTLinitialize_gpu (const int, const int, const int, const
 __device__ extern int GPTLreset_gpu (void);
 
 /* VERBOSE is a debugging ifdef local to the rest of this file */
-#define VERBOSE
+#undef VERBOSE
 
 /*
 ** GPTLinitialize_gpu (): Initialization routine must be called from single-threaded

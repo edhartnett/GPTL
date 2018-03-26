@@ -3,7 +3,7 @@ include ../macros.make
 FC      = pgfortran
 FFLAGS  = -acc -Minfo=accel -Minfo -ta=tesla:cc60
 CU      = nvcc
-CUFLAGS = -UDEBUG -DENABLE_ACC $(UNDERSCORING) -G -O0 -ftz=true -gencode arch=compute_60,code=compute_60 -rdc=true
+CUFLAGS = -O0 -G -lineinfo -UDEBUG -DENABLE_ACC $(UNDERSCORING) -ftz=true -gencode arch=compute_60,code=compute_60 -rdc=true
 # Added diagnostic print
 ifeq ($(ENABLE_NOTIFY_ONFLG),yes)
   CUFLAGS += -DNOTIFY_ONFLG
@@ -22,7 +22,7 @@ all: $(OBJS)
 	$(AR) $(ARFLAGS) lib$(GPULIB).a $(OBJS)
 	ranlib lib$(GPULIB).a
 
-gptl.o: gptl_acc.h private.h
+gptl.o: gptl_cuda.h private.h
 gptl_acc.o: gptl_acc.F90
 util.o: private.h
 

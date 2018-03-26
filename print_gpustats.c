@@ -6,6 +6,7 @@
 #include "private.h"
 
 extern int GPTLget_gpusizes (int [], int []);
+#pragma acc routine seq
 extern int GPTLget_overhead_gpu (long long [],            /* Fortran overhead */
 				 long long [],            /* Getting my thread index */
 				 long long [],            /* Generating hash index */
@@ -18,7 +19,7 @@ extern int GPTLfill_gpustats (Gpustats [], int [], int [], int []);
 #pragma acc routine (GPTLget_gpusizes) seq
 #pragma acc routine (GPTLfill_gpustats) seq 
 #pragma acc routine (GPTLget_memstats_gpu) seq
-#pragma acc routine (GPTLget_overhead_gpu) seq
+//#pragma acc routine (GPTLget_overhead_gpu) seq
 
 void GPTLprint_gpustats (FILE *fp, double gpu_hz, int maxthreads_gpu, int devnum)
 {
@@ -70,10 +71,13 @@ void GPTLprint_gpustats (FILE *fp, double gpu_hz, int maxthreads_gpu, int devnum
   fprintf (fp, "%s: hostname=%s\n", thisfunc, hostname);
 
 #pragma acc kernels copyout(ret, nwarps_found, nwarps_timed)
-  ret = GPTLget_gpusizes (nwarps_found, nwarps_timed);
+  {
+    ret = GPTLget_gpusizes (nwarps_found, nwarps_timed);
+  }
 
-#pragma acc kernels copyout(ret, ftn_ohdgpu, get_thread_num_ohdgpu, genhashidx_ohdgpu, \
-			    getentry_ohdgpu, utr_ohdgpu, self_ohdgpu, parent_ohdgpu)			     
+#pragma acc parallel copyout(ret, ftn_ohdgpu, get_thread_num_ohdgpu, genhashidx_ohdgpu, \
+			    getentry_ohdgpu, utr_ohdgpu, self_ohdgpu, parent_ohdgpu)
+  {
   ret = GPTLget_overhead_gpu (ftn_ohdgpu,
 			      get_thread_num_ohdgpu,
 			      genhashidx_ohdgpu,
@@ -81,6 +85,7 @@ void GPTLprint_gpustats (FILE *fp, double gpu_hz, int maxthreads_gpu, int devnum
 			      utr_ohdgpu,
 			      self_ohdgpu,
 			      parent_ohdgpu);
+  }
 
   fprintf (fp, "Underlying timing routine was clock64()\n");
   tot_ohdgpu = (ftn_ohdgpu[0] + get_thread_num_ohdgpu[0] + genhashidx_ohdgpu[0] + 
@@ -99,8 +104,11 @@ void GPTLprint_gpustats (FILE *fp, double gpu_hz, int maxthreads_gpu, int devnum
 	   utr_ohdgpu[0] / gpu_hz, utr_ohdgpu[0] * 100. / (tot_ohdgpu * gpu_hz) );
 
   printf ("%s: calling gpu kernel GPTLfill_gpustats...\n", thisfunc);
-#pragma acc kernels copyout(ret, gpustats, max_name_len_gpu, ngputimers, ncollisions)
-  ret = GPTLfill_gpustats (gpustats, max_name_len_gpu, ngputimers, ncollisions);
+#pragma acc parallel copyout(ret, gpustats, max_name_len_gpu, ngputimers, ncollisions)
+  {
+    ret = GPTLfill_gpustats (gpustats, max_name_len_gpu, ngputimers, ncollisions);
+  }
+
   printf ("%s: returned from GPTLfill_gpustats: printing results\n", thisfunc);
 
   fprintf (fp, "\nGPU timing stats\n");
@@ -118,35 +126,38 @@ void GPTLprint_gpustats (FILE *fp, double gpu_hz, int maxthreads_gpu, int devnum
   extraspace = max_name_len_gpu[0] - 4; // "name" is 4 chars
   for (i = 0; i < extraspace; ++i)
     fprintf (fp, " ");
-  fprintf (fp, "name calls warps  wallmax (warp) wallmin (warp) maxcount (warp) mincount (warp) self_OH parent_OH\n");
+  fprintf (fp, "name    calls  warps  wallmax  (warp) wallmin  (warp) maxcount (warp) mincount  (warp) self_OH parent_OH\n");
   for (n = 0; n < ngputimers[0]; ++n) {
     extraspace = max_name_len_gpu[0] - strlen (gpustats[n].name);
     for (i = 0; i < extraspace; ++i)
       fprintf (fp, " ");
-    fprintf (fp, "%s ", gpustats[n].name);             // regopm name
-    fprintf (fp, "%5d ", gpustats[n].count);           // # start/stops of region 
-    fprintf (fp, "%5d ", gpustats[n].nwarps);          // nwarps_timed involving name
+    fprintf (fp, "%s ", gpustats[n].name);             // region name
+    if (gpustats[n].count < 1000000)
+      fprintf (fp, "%8d ", gpustats[n].count);           // # start/stops of region 
+    else
+      fprintf (fp, "%8.2e ", (float) gpustats[n].count);           // # start/stops of region 
+    fprintf (fp, "%6d ", gpustats[n].nwarps);          // nwarps_timed involving name
     
     wallmax = gpustats[n].accum_max / gpu_hz;          // max time for name across warps
     if (wallmax < 0.01)
       fprintf (fp, "%8.2e ", wallmax);
     else
       fprintf (fp, "%8.3f ", wallmax);
-    fprintf (fp, "%5d ",gpustats[n].accum_max_warp);   // warp number for max
+    fprintf (fp, "%6d ",gpustats[n].accum_max_warp);   // warp number for max
     
     wallmin = gpustats[n].accum_min / gpu_hz;          // min time for name across warps
     if (wallmin < 0.01)
       fprintf (fp, "%8.2e ", wallmin);
     else
       fprintf (fp, "%8.3f ", wallmin);	       
-    fprintf (fp, "%5d ",gpustats[n].accum_min_warp);   // warp number for min
+    fprintf (fp, "%6d ",gpustats[n].accum_min_warp);   // warp number for min
     
     count_max = gpustats[n].count_max;
     if (count_max < PRTHRESH)
       fprintf (fp, "%9lu ", count_max);                // max count for region "name"
     else
       fprintf (fp, "%9.1e ", (float) count_max);
-    fprintf (fp, "%5d ",gpustats[n].count_max_warp);   // warp which accounted for max times
+    fprintf (fp, "%6d ",gpustats[n].count_max_warp);   // warp which accounted for max times
     
     count_min = gpustats[n].count_min;                
     if (count_min < PRTHRESH)

@@ -161,10 +161,10 @@ install: lib$(LIBNAME).a
 	install -d $(INSTALLDIR)/man/man3 
 	install -m 0644 lib$(LIBNAME).a $(INSTALLDIR)/lib
 	install -m 0644 gptl.h $(INSTALLDIR)/include
+	install -m 0644 cuda/gptl_cuda.h $(INSTALLDIR)/include
 ifeq ($(ENABLE_ACC),yes)
+	install -m 0644 cuda/gptl_cuda.inc $(INSTALLDIR)/include
 	install -m 0644 cuda/lib$(LIBNAME)_cuda.a $(INSTALLDIR)/lib
-	install -m 0644 cuda/gptl_acc.h $(INSTALLDIR)/include
-	install -m 0644 cuda/gptl_acc.inc $(INSTALLDIR)/include
 	install -m 0644 cuda/gptl_acc.mod $(INSTALLDIR)/include
 endif
 ifeq ($(FORTRAN),yes)
